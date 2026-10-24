@@ -21,35 +21,7 @@ $log = Join-Path $out "setup.txt"
 "" | Out-File -Encoding utf8 $log
 
 function Say([string]$s) { Write-Output $s; $s | Out-File -Append -Encoding utf8 $log }
-function Enc([string]$s) { [Uri]::EscapeDataString($s) }
-
-# glab api wrapper. -Str values are sent as strings, -Typed values as JSON true/false/numbers.
-function Api {
-  param([string]$Method = "GET", [string]$Path, [hashtable]$Str = @{}, [hashtable]$Typed = @{}, [switch]$AllowFail)
-  $a = @("api", "-X", $Method, $Path)
-  foreach ($k in $Str.Keys) { $a += @("-f", "$k=$($Str[$k])") }
-  foreach ($k in $Typed.Keys) { $a += @("-F", "$k=$($Typed[$k])") }
-  # PowerShell 5.1 turns native stderr into errors; read it as plain text instead.
-  # Retry with backoff on network timeouts, rate limits (429) and server errors.
-  $prev = $ErrorActionPreference; $ErrorActionPreference = "Continue"
-  for ($try = 1; $try -le 5; $try++) {
-    $raw = & glab @a 2>&1 | Out-String
-    $code = $LASTEXITCODE
-    # Writes are retried only when the request never reached GitLab (connect/TLS failure) or was rate limited,
-    # so a retry can't create a duplicate. Reads are retried on any network or server error.
-    $retryable = if ($Method -eq "GET") { 'timeout|TLS handshake|connection reset|EOF|HTTP 429|HTTP 5\d\d' } else { 'dial tcp|TLS handshake|HTTP 429' }
-    if ($code -eq 0 -or $raw -notmatch $retryable) { break }
-    Write-Output "  (network issue, retry $try/5)"
-    Start-Sleep -Seconds (3 * $try)
-  }
-  $ErrorActionPreference = $prev
-  if ($code -ne 0) {
-    if ($AllowFail) { return $null }
-    throw "glab api $Method $Path failed: $($raw.Trim())"
-  }
-  if ($raw.Trim()) { return $raw | ConvertFrom-Json }
-  return $null
-}
+. (Join-Path $PSScriptRoot "lib.ps1")
 
 $me = Api -Path "user"
 Say "Logged in as $($me.username)"
@@ -71,12 +43,16 @@ if (-not $proj) {
 }
 
 # ---- 2. Settings: public, pipelines must succeed, delete source branch --------
+# Pipeline variables: new projects allow no one to set them. Maintainers (and trigger tokens they own) need
+# them for GG_DEFERRED re-triggers and the manual smoke run, so allow Maintainers and above only.
 $proj = Api -Method PUT -Path "projects/$id" `
-  -Str @{ visibility = "public"; merge_method = "merge"; builds_access_level = "enabled"; issues_access_level = "enabled" } `
+  -Str @{ visibility = "public"; merge_method = "merge"; builds_access_level = "enabled"; issues_access_level = "enabled";
+          ci_pipeline_variables_minimum_override_role = "maintainer" } `
   -Typed @{ only_allow_merge_if_pipeline_succeeds = "true"; allow_merge_on_skipped_pipeline = "false";
             remove_source_branch_after_merge = "true"; shared_runners_enabled = "true" }
-Say ("[2] settings: visibility={0} pipelines_must_succeed={1} delete_source_branch={2} shared_runners={3}" -f `
-  $proj.visibility, $proj.only_allow_merge_if_pipeline_succeeds, $proj.remove_source_branch_after_merge, $proj.shared_runners_enabled)
+Say ("[2] settings: visibility={0} pipelines_must_succeed={1} delete_source_branch={2} shared_runners={3} pipeline_variables={4}" -f `
+  $proj.visibility, $proj.only_allow_merge_if_pipeline_succeeds, $proj.remove_source_branch_after_merge, $proj.shared_runners_enabled,
+  $proj.ci_pipeline_variables_minimum_override_role)
 
 # ---- 3. Labels -----------------------------------------------------------------
 $labels = [ordered]@{
@@ -139,7 +115,9 @@ $vars = [ordered]@{
 foreach ($k in $vars.Keys) {
   $v = $vars[$k][0]; $prot = if ($vars[$k][1]) { "true" } else { "false" }
   $cur = Api -Path "projects/$id/variables/$k" -AllowFail
-  if ($cur) {
+  if ($cur -and $cur.value -eq $v -and "$($cur.protected)".ToLower() -eq $prot) {
+    Say "[6] variable $k unchanged"
+  } elseif ($cur) {
     Api -Method PUT -Path "projects/$id/variables/$k" -Str @{ value = $v } -Typed @{ protected = $prot; masked = "false" } | Out-Null
     Say "[6] variable $k updated (protected=$prot)"
   } else {

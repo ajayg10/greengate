@@ -34,7 +34,7 @@ gg-smoke:
     - aws lambda list-functions --query 'length(Functions)' --output text
     - aws ecr describe-repositories --repository-names greengate --query 'repositories[0].repositoryUri' --output text
     - aws s3api list-objects-v2 --bucket "$GG_LEDGER_BUCKET" --max-items 5 --query 'KeyCount' --output text
-    - echo "== ci role (any branch): write to the ledger bucket =="
+    - echo "== ci role (any branch), write to the ledger bucket =="
     - echo "smoke pipeline $CI_PIPELINE_ID" | AWS_ROLE_ARN="$AWS_CI_ROLE_ARN" aws s3 cp - "s3://$GG_LEDGER_BUCKET/smoke/$CI_PIPELINE_ID.txt"
     - AWS_ROLE_ARN="$AWS_CI_ROLE_ARN" aws sts get-caller-identity --query Arn --output text
     - echo "== Control Room note =="
