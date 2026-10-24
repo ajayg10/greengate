@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InvokeDeferrer",
+      "Effect": "Allow",
+      "Action": "lambda:InvokeFunction",
+      "Resource": [
+        "arn:aws:lambda:__REGION__:__ACCOUNT_ID__:function:gg-deferrer",
+        "arn:aws:lambda:__REGION__:__ACCOUNT_ID__:function:gg-deferrer:*"
+      ]
+    }
+  ]
+}

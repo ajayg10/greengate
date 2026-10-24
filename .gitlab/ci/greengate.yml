@@ -1,0 +1,51 @@
+# GreenGate machinery jobs (protected by the guardrail policy from Phase 4).
+
+# Keyless AWS auth. GitLab issues a short-lived OIDC JWT for the job, and the AWS CLI exchanges it for
+# temporary role credentials (sts:AssumeRoleWithWebIdentity). No AWS access keys exist anywhere in CI.
+# The roles only trust tokens from this project (see infra/aws/policies/oidc-trust.json).
+.gg-aws-oidc:
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
+  before_script:
+    - export AWS_REGION="$AWS_REGION_PRIMARY"
+    - export AWS_WEB_IDENTITY_TOKEN_FILE="$(mktemp)"
+    - printf '%s' "$GITLAB_OIDC_TOKEN" > "$AWS_WEB_IDENTITY_TOKEN_FILE"
+    - export AWS_ROLE_SESSION_NAME="gitlab-${CI_PROJECT_ID}-${CI_JOB_ID}"
+
+# Plumbing check: OIDC -> AWS roles, ECR, ledger bucket, Control Room note.
+# Manual on main so it doesn't spend CI minutes. Run it with:
+#   glab ci run --branch main --variables GG_RUN_SMOKE:true
+gg-smoke:
+  extends: .gg-aws-oidc
+  stage: test
+  image:
+    name: amazon/aws-cli:2.36.48
+    entrypoint: [""]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $GG_RUN_SMOKE == "true"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
+  script:
+    - echo "== deploy role (main branch only) =="
+    - export AWS_ROLE_ARN="$AWS_DEPLOYER_ROLE_ARN"
+    - aws sts get-caller-identity --query Arn --output text
+    - aws lambda list-functions --query 'length(Functions)' --output text
+    - aws ecr describe-repositories --repository-names greengate --query 'repositories[0].repositoryUri' --output text
+    - aws s3api list-objects-v2 --bucket "$GG_LEDGER_BUCKET" --max-items 5 --query 'KeyCount' --output text
+    - echo "== ci role (any branch): write to the ledger bucket =="
+    - echo "smoke pipeline $CI_PIPELINE_ID" | AWS_ROLE_ARN="$AWS_CI_ROLE_ARN" aws s3 cp - "s3://$GG_LEDGER_BUCKET/smoke/$CI_PIPELINE_ID.txt"
+    - AWS_ROLE_ARN="$AWS_CI_ROLE_ARN" aws sts get-caller-identity --query Arn --output text
+    - echo "== Control Room note =="
+    - |
+      if [ -z "${GITLAB_BOT_TOKEN:-}" ]; then
+        echo "skipped: GITLAB_BOT_TOKEN is not set yet"
+      else
+        command -v curl >/dev/null || yum install -y -q curl-minimal || yum install -y -q curl
+        curl --fail --silent --show-error --retry 3 -o /dev/null \
+          --header "PRIVATE-TOKEN: ${GITLAB_BOT_TOKEN}" \
+          --data-urlencode "body=GreenGate smoke test OK ${CI_PIPELINE_URL}" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/issues/${GG_CONTROL_ISSUE_IID}/notes"
+        echo "posted to issue #${GG_CONTROL_ISSUE_IID}"
+      fi

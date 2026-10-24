@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local secrets and generated files
+.gg-out/
+.env
+*.env
+!example.env
+sci-report.json
+deploy.env
+rollback.json
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
