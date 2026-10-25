@@ -205,3 +205,15 @@ def test_canary_noop_when_version_is_already_live():
                      sleep=lambda s: None)
     assert out.promoted and out.new_version == out.stable_version == "3"
     assert not any(h[0] == "alias" for h in lam.history)
+
+
+def test_warm_up_waits_for_consecutive_fast_answers():
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        return httpx.Response(200 if calls["n"] > 2 else 503, json={})
+
+    c = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://x")
+    n = probe.warm_up(c, "https://x", sleep=lambda s: None)
+    assert n == 5  # two failures, then three fast successes in a row

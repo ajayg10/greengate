@@ -90,6 +90,8 @@ def test_dashboard_data_separates_measured_and_counts():
     assert k["median_rollback_seconds"] == 1.8
     assert len(data["series"]) == 4 and len(data["decisions"]) == 4
     assert data["series"][-1]["complete"] is False
+    from greengate.dashboard_data import app_failures
+    assert app_failures({"failed_jobs": ["gg-canary"]}) == []
     json.dumps(data)
 
 

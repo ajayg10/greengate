@@ -223,8 +223,10 @@ def cmd_verdict(a: argparse.Namespace) -> int:
     ledger = ledger_or_none()
     baselines = []
     if ledger:
+        from greengate.dashboard_data import app_failures
+
         rows = [r for r in ledger.recent(kind="baseline", ref=env("CI_DEFAULT_BRANCH", "main"), n=50)
-                if not r.get("failed_jobs")]
+                if not app_failures(r)]
         baselines = rows[-3:]
     candidate = {"app_gco2e": report.get("app", {}).get("gco2e_total", 0.0),
                  "app_runner_minutes": report.get("app", {}).get("runner_minutes", 0.0)}

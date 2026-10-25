@@ -49,16 +49,31 @@ def slo_ok(result: ProbeResult, *, max_error_rate: float, max_p95_ms: float) -> 
     return result.error_rate <= max_error_rate and result.p95_ms <= max_p95_ms and result.version_ok
 
 
+def warm_up(c: httpx.Client, base: str, *, fast_ms: float = 400, needed: int = 3, max_calls: int = 15,
+            sleep=time.sleep) -> int:
+    """Call /healthz until `needed` consecutive answers are fast. A new Lambda container image version cold-starts
+    on its first requests (and sometimes in more than one execution environment), which is real but is not what the
+    SLO is about; the SLO is about the new code's warm behaviour. Returns the number of warm-up calls made."""
+    streak = 0
+    for i in range(1, max_calls + 1):
+        t0 = time.perf_counter()
+        try:
+            ok = c.get(f"{base}/healthz").status_code == 200
+        except httpx.HTTPError:
+            ok = False
+        streak = streak + 1 if ok and (time.perf_counter() - t0) * 1000 < fast_ms else 0
+        if streak >= needed:
+            return i
+        sleep(0.2)
+    return max_calls
+
+
 def run(base_url: str, *, requests: int, duration_s: float, max_error_rate: float, max_p95_ms: float,
         expected_revision: str | None = None, client: httpx.Client | None = None, sleep=time.sleep) -> ProbeResult:
-    """Each round: POST /links, GET /<code> (expect 307), GET /healthz. Two warm-up calls are not counted."""
+    """Each round: POST /links, GET /<code> (expect 307), GET /version. Warm-up calls are not counted."""
     c = client or httpx.Client(timeout=10.0, follow_redirects=False)
     base = base_url.rstrip("/")
-    for _ in range(2):  # cold start is a real but separate concern; the SLO is about warm behaviour
-        try:
-            c.get(f"{base}/healthz")
-        except httpx.HTTPError:
-            pass
+    warm_up(c, base, sleep=sleep)
     samples: list[dict[str, Any]] = []
     versions: list[str] = []
     rounds = max(1, requests // 3)

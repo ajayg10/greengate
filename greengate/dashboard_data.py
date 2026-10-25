@@ -9,13 +9,18 @@ from typing import Any
 PIPELINE_KINDS = {"baseline", "optimized", "normal"}
 
 
+def app_failures(record: dict[str, Any]) -> list[str]:
+    """Failed app jobs (lint/test/build). Deploy and GreenGate jobs (gg-*) don't make the app measurement incomplete."""
+    return [n for n in record.get("failed_jobs") or [] if not str(n).startswith("gg-")]
+
+
 def _median(values: list[float]) -> float | None:
     return statistics.median(values) if values else None
 
 
 def build(records: list[dict[str, Any]]) -> dict[str, Any]:
     pipes = [r for r in records if r.get("kind") in PIPELINE_KINDS and "gco2e_total" in r]
-    complete = [r for r in pipes if not r.get("failed_jobs")]  # incomplete runs never enter the medians
+    complete = [r for r in pipes if not app_failures(r)]  # runs with failed app jobs never enter the medians
     base = [r for r in complete if r["kind"] == "baseline"]
     opt = [r for r in complete if r["kind"] == "optimized"]
     base_g = _median([float(r.get("app_gco2e", r["gco2e_total"])) for r in base])
@@ -59,7 +64,7 @@ def build(records: list[dict[str, Any]]) -> dict[str, Any]:
         "series": [{"t": r.get("created_at"), "g": round(float(r["gco2e_total"]), 4),
                     "app_g": round(float(r.get("app_gco2e", r["gco2e_total"])), 4), "kind": r["kind"],
                     "minutes": r.get("runner_minutes"), "pipeline": r.get("pipeline_id"), "url": r.get("web_url"),
-                    "ref": r.get("ref"), "complete": not r.get("failed_jobs"),
+                    "ref": r.get("ref"), "complete": not app_failures(r),
                     "if_hosted_g": r.get("gco2e_if_gitlab_hosted")} for r in pipes],
         "decisions": [{"t": r.get("created_at"), "kind": r.get("kind"), "action": r.get("action"),
                        "reason": r.get("reason") or ("promoted" if r.get("kind") == "deploy" else "rolled back"),
