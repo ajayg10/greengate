@@ -22,3 +22,10 @@ rollback.json
 .idea/
 .DS_Store
 Thumbs.db
+canary.json
+decision.json
+policy.json
+verdict.json
+findings.json
+sci-report.md
+dashboard/data.json
