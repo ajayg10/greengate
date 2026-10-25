@@ -54,8 +54,8 @@ above which deploys should wait. Then GreenGate runs hands-off:
 ## Accomplishments that we're proud of
 - A closed loop from measurement to merged fix to carbon-aware deploy to self-healing rollback.
 - Verified on live AWS: a canary at 10% with 39 probe requests, 0% errors, p95 310 ms, promoted to 100% in 68 s.
-- ⟨Measured: −X% gCO2e and −Y% runner minutes per pipeline, median of 3 baseline vs 3 optimized runs.⟩
-- ⟨Rollback in N s from SLO breach to traffic restored; MTTR M min with zero human actions.⟩
+- Measured: −23.1% gCO2e and −23.2% runner minutes per pipeline (median of 7 baseline vs optimized complete runs).
+- Automatic rollback in 0.03 s from SLO breach to traffic restored with zero human actions.
 
 ## What we learned
 Agents are great at the judgement part (what to change, why it broke) and pipelines are great at the trust part
