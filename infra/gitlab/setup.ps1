@@ -12,7 +12,10 @@ param(
   [string]$ProjectName = "greengate",
   [string]$AwsAccountId = "221082195174",
   [string]$AwsRegionPrimary = "eu-north-1",
-  [string]$AwsRegionSecondary = "us-west-2"
+  [string]$AwsRegionSecondary = "us-west-2",
+  # Outputs of infra/aws/app.sh (not secrets).
+  [string]$AppUrl = "https://u72w7ug22esgggvbemt4ovrfnu0xrfpe.lambda-url.eu-north-1.on.aws",
+  [string]$AmplifyAppId = "d28t6c9al9r6ob"
 )
 $ErrorActionPreference = "Stop"
 $out = Join-Path $PSScriptRoot "..\..\.gg-out"
@@ -111,6 +114,11 @@ $vars = [ordered]@{
   "GG_DEFERRER_ROLE_ARN"  = @("arn:aws:iam::${AwsAccountId}:role/gg-deferrer", $false)
   "GG_CONTROL_ISSUE_IID"  = @("$($issue.iid)", $false)
   "GG_DEMO_MODE"          = @("true", $false)
+  "GG_FUNCTION_NAME"      = @("ecolinks", $false)
+  "GG_DEFERRER_ARN"       = @("arn:aws:lambda:${AwsRegionPrimary}:${AwsAccountId}:function:gg-deferrer", $false)
+  "GG_APP_URL"            = @($AppUrl, $false)
+  "GG_AMPLIFY_APP_ID"     = @($AmplifyAppId, $false)
+  "GG_DASHBOARD_URL"      = @("https://main.$AmplifyAppId.amplifyapp.com", $false)
 }
 foreach ($k in $vars.Keys) {
   $v = $vars[$k][0]; $prot = if ($vars[$k][1]) { "true" } else { "false" }

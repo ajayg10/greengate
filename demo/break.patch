@@ -1,0 +1,16 @@
+diff --git a/app/store.py b/app/store.py
+index 500d497..5b6085c 100644
+--- a/app/store.py
++++ b/app/store.py
+@@ -96,9 +96,9 @@ class DynamoStore:
+         try:
+             res = self._table.update_item(
+                 Key={"code": code},
+-                UpdateExpression="ADD hits :one",
++                UpdateExpression="ADD hits :one SET last_visit = :now, status = :active",
+                 ConditionExpression="attribute_exists(code)",
+-                ExpressionAttributeValues={":one": 1},
++                ExpressionAttributeValues={":one": 1, ":now": _now(), ":active": "active"},
+                 ReturnValues="ALL_NEW",
+             )
+         except ClientError as err:

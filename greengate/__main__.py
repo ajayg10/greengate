@@ -274,7 +274,7 @@ def cmd_decide(a: argparse.Namespace) -> int:
                                       "for this commit (docs-only change)\n", encoding="utf-8")
         log("nothing to deploy: no image for this commit")
         return 0
-    d = decide(intent=intent, mr_labels=labels, intensity_of=lambda r: get_intensity(r, coefficients),
+    d = decide(intent=intent, mr_labels=labels, intensity_of=lambda r: get_intensity(r, coefficients, allow_force=True),
                deferred=env("GG_DEFERRED") == "true", first_deferred_at=env("GG_FIRST_DEFERRED_AT") or None,
                demo_mode=env("GG_DEMO_MODE") == "true")
     Path("deploy.env").write_text(d.to_env(), encoding="utf-8")

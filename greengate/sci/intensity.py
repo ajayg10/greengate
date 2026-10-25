@@ -48,8 +48,10 @@ def get_intensity(
     api_key: str | None = None,
     client: httpx.Client | None = None,
     use_cache: bool = True,
+    allow_force: bool = False,
 ) -> Intensity:
-    forced = os.environ.get("GG_FORCE_INTENSITY")
+    # The demo override only ever applies to deploy decisions (allow_force=True), never to SCI measurements.
+    forced = os.environ.get("GG_FORCE_INTENSITY") if allow_force else None
     if forced:
         return Intensity(region, float(forced), "demo override (GG_FORCE_INTENSITY), not a measurement",
                          datetime.now(UTC).isoformat(timespec="seconds"), live=False, verified=False)

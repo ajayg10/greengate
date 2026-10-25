@@ -89,8 +89,10 @@ def test_intensity_static_forced_and_live(monkeypatch):
     assert s.live is False and s.g_per_kwh == 35 and s.verified is False
     intensity_mod.clear_cache()
     monkeypatch.setenv("GG_FORCE_INTENSITY", "420")
-    forced = get_intensity("eu-north-1", COEFF)
+    forced = get_intensity("eu-north-1", COEFF, allow_force=True)
     assert forced.g_per_kwh == 420 and "demo override" in forced.source
+    intensity_mod.clear_cache()
+    assert get_intensity("us-east1", COEFF, api_key="").g_per_kwh == 579  # SCI measurements ignore the override
     monkeypatch.delenv("GG_FORCE_INTENSITY")
 
     def handler(request):
