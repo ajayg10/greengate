@@ -1,42 +1,75 @@
-# greengate-profile: baseline
+# greengate-profile: optimized
 #
-# BASELINE app pipeline, INTENTIONALLY UNOPTIMIZED. It is modeled on common CI anti-patterns found in real
-# repositories, so the greengate-optimizer Duo flow has honest waste to remove:
-#   - the full python:3.12 image (about 1 GB) instead of python:3.12-slim
-#   - pip install with no cache, in every job
-#   - strictly sequential stages, no needs:
-#   - every job runs on every change (no rules:changes), so a docs-only change rebuilds everything
-#   - the unit tests run twice, in two jobs
-#   - docker build without --cache-from (no layer cache)
-# It is still CORRECT: tests pass, and the image builds and is pushed to Amazon ECR.
-# GreenGate measures every run (SCI) and the optimizer's MR pipeline measures the before/after.
+# Optimized by GreenGate: pip cache, python:3.12-slim, de-duplicated tests, needs DAG, rules:changes, layer cache.
+# Guaranteed: identical test assertions, unchanged ECR push target and least-privilege OIDC roles.
 
 lint:
   stage: lint
-  image: python:3.12
+  image: python:3.12-slim
+  needs: []
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  cache:
+    key:
+      files: [requirements-dev.txt]
+    paths: [.cache/pip]
+  rules:
+    - changes:
+        - app/**/*
+        - tests/**/*
+        - scripts/**/*
+        - greengate/**/*
+        - requirements*.txt
+        - pyproject.toml
+        - .gitlab/ci/app.yml
   script:
-    - pip install --no-cache-dir -r requirements-dev.txt
+    - pip install -r requirements-dev.txt
     - ruff check .
 
 unit-tests:
   stage: test
-  image: python:3.12
+  image: python:3.12-slim
+  needs: []
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  cache:
+    key:
+      files: [requirements-dev.txt]
+    paths: [.cache/pip]
+  rules:
+    - changes:
+        - app/**/*
+        - tests/**/*
+        - scripts/**/*
+        - greengate/**/*
+        - requirements*.txt
+        - pyproject.toml
+        - .gitlab/ci/app.yml
   script:
-    - pip install --no-cache-dir -r requirements-dev.txt
-    - pytest -q tests --cov=app --cov-report=term
-
-unit-tests-again:
-  stage: test
-  image: python:3.12
-  script:
-    - pip install --no-cache-dir -r requirements-dev.txt
+    - pip install -r requirements-dev.txt
     - pytest -q tests --cov=app --cov-report=term
 
 integration-tests:
   stage: test-integration
-  image: python:3.12
+  image: python:3.12-slim
+  needs: [unit-tests]
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  cache:
+    key:
+      files: [requirements-dev.txt]
+    paths: [.cache/pip]
+  rules:
+    - changes:
+        - app/**/*
+        - tests/**/*
+        - scripts/**/*
+        - greengate/**/*
+        - requirements*.txt
+        - pyproject.toml
+        - .gitlab/ci/app.yml
   script:
-    - pip install --no-cache-dir -r requirements-dev.txt
+    - pip install -r requirements-dev.txt
     - (python -m uvicorn app.main:app --host 127.0.0.1 --port 8080 &)
     - python scripts/smoke_local.py http://127.0.0.1:8080
 
@@ -44,13 +77,21 @@ build-image:
   stage: build
   extends: .gg-aws-oidc
   image: docker:27.3.1
+  needs: [integration-tests]
   services:
     - docker:27.3.1-dind
   variables:
     DOCKER_TLS_CERTDIR: "/certs"
     AWS_ROLE_ARN: $AWS_CI_ROLE_ARN
+  rules:
+    - changes:
+        - app/**/*
+        - requirements*.txt
+        - .gitlab/ci/app.yml
   script:
     - apk add --no-cache --upgrade expat aws-cli
     - aws ecr get-login-password | docker login --username AWS --password-stdin "${ECR_REPOSITORY_URI%%/*}"
-    - docker build --provenance=false -f app/Dockerfile --build-arg GG_GIT_SHA="$CI_COMMIT_SHA" -t "$ECR_REPOSITORY_URI:$CI_COMMIT_SHA" .
+    - docker pull "$ECR_REPOSITORY_URI:latest" || true
+    - docker build --provenance=false --cache-from "$ECR_REPOSITORY_URI:latest" --build-arg BUILDKIT_INLINE_CACHE=1 -f app/Dockerfile --build-arg GG_GIT_SHA="$CI_COMMIT_SHA" -t "$ECR_REPOSITORY_URI:$CI_COMMIT_SHA" -t "$ECR_REPOSITORY_URI:latest" .
     - docker push "$ECR_REPOSITORY_URI:$CI_COMMIT_SHA"
+    - docker push "$ECR_REPOSITORY_URI:latest"
