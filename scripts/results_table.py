@@ -21,7 +21,10 @@ def link(pid) -> str:
 def main() -> None:
     rows = Ledger(os.environ["GG_LEDGER_BUCKET"]).records()
     pipes = [r for r in rows if r.get("kind") in {"baseline", "optimized", "normal"}]
-    print("| Pipeline | Profile | Complete | App gCO2e | App runner min | Total gCO2e | Same minutes on GitLab hosted (counterfactual) |")
+    print(
+        "| Pipeline | Profile | Complete | App gCO2e | App runner min | Total gCO2e | "
+        "Same minutes on GitLab hosted (counterfactual) |"
+    )
     print("|---|---|---|---|---|---|---|")
     for r in pipes:
         hosted = r.get("gco2e_if_gitlab_hosted")
@@ -33,17 +36,25 @@ def main() -> None:
         if ok:
             g = statistics.median(r["app_gco2e"] for r in ok)
             m = statistics.median(r["app_runner_minutes"] for r in ok)
-            print(f"\n**{kind} median** over {len(ok)} complete runs: {g:.4f} gCO2e (app scope), {m:.2f} runner minutes")
+            print(
+                f"\n**{kind} median** over {len(ok)} complete runs: "
+                f"{g:.4f} gCO2e (app scope), {m:.2f} runner minutes"
+            )
     print("\n| Pipeline | Event | Detail |")
     print("|---|---|---|")
     for r in rows:
         k = r.get("kind")
         if k == "decision":
-            print(f"| {link(r['pipeline_id'])} | decision: {r['action']} | {r['reason']} (source: {r['intensity']['source']}) |")
+            print(
+                f"| {link(r['pipeline_id'])} | decision: {r['action']} | "
+                f"{r['reason']} (source: {r['intensity']['source']}) |"
+            )
         elif k == "deploy":
             p = r.get("probe") or {}
-            print(f"| {link(r['pipeline_id'])} | promoted v{r['new_version']} (from v{r['stable_version']}) | "
-                  f"probe {p.get('requests')} requests, {p.get('error_rate', 0):.0%} errors, p95 {p.get('p95_ms')} ms |")
+            print(
+                f"| {link(r['pipeline_id'])} | promoted v{r['new_version']} (from v{r['stable_version']}) | "
+                f"probe {p.get('requests')} requests, {p.get('error_rate', 0):.0%} errors, p95 {p.get('p95_ms')} ms |"
+            )
         elif k == "rollback":
             p = r.get("probe") or {}
             print(f"| {link(r['pipeline_id'])} | rolled back v{r['bad_version']} to v{r['stable_version']} | "
