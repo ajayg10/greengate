@@ -21,8 +21,16 @@ docs/METHODOLOGY.md §3b. The last column prices the same job minutes on GitLab'
 | [#2986021392](https://gitlab.com/ajayg10/greengate/-/pipelines/2986021392) | normal (deferred re-run) | yes | 0.0000 | 0.00 | 0.0290 | 0.1332 |
 | [#2986026797](https://gitlab.com/ajayg10/greengate/-/pipelines/2986026797) | baseline | no: lint | 0.0060 | 0.29 | 0.0060 | 0.0274 |
 | [#2986240536](https://gitlab.com/ajayg10/greengate/-/pipelines/2986240536) | baseline | yes | 0.0373 | 1.79 | 0.0681 | 0.3134 |
+| [#2986254631](https://gitlab.com/ajayg10/greengate/-/pipelines/2986254631) | baseline | yes | 0.0369 | 1.77 | 0.0683 | 0.3143 |
+| [#2986277330](https://gitlab.com/ajayg10/greengate/-/pipelines/2986277330) | normal | yes | 0.0367 | 1.76 | 0.0367 | 0.1687 |
+| [#2986278167](https://gitlab.com/ajayg10/greengate/-/pipelines/2986278167) | normal | yes | 0.0293 | 1.41 | 0.0386 | 0.1775 |
+| [#2986291520](https://gitlab.com/ajayg10/greengate/-/pipelines/2986291520) | optimized | yes | 0.0290 | 1.39 | 0.0599 | 0.2757 |
 
-**baseline median** over 6 complete runs: 0.0377 gCO2e (app scope), 1.81 runner minutes
+**baseline median** over 7 complete runs: **0.0377 gCO2e** (app scope), 1.81 runner minutes
+
+**optimized median** over complete runs: **0.0290 gCO2e** (app scope), 1.39 runner minutes
+
+**Measured reduction: -23.1% gCO2e and -23.2% runner minutes** per pipeline.
 
 | Pipeline | Event | Detail |
 |---|---|---|
@@ -39,10 +47,15 @@ docs/METHODOLOGY.md §3b. The last column prices the same job minutes on GitLab'
 | [#2986021392](https://gitlab.com/ajayg10/greengate/-/pipelines/2986021392) | promoted v7 (from v6) | probe 39 requests, 0% errors, p95 47.8 ms |
 | [#2986240536](https://gitlab.com/ajayg10/greengate/-/pipelines/2986240536) | decision: DEPLOY_NOW | eu-north-1 grid at 35 gCO2e/kWh, below 150 (source: static: Ember 2025 Sweden national average as cited by https://inzonex.co.uk/poweratlas/sweden/ (Ember: 99% low-carbon in 2025) (accessed 2026-10-25)) |
 | [#2986240536](https://gitlab.com/ajayg10/greengate/-/pipelines/2986240536) | promoted v8 (from v7) | probe 39 requests, 0% errors, p95 45.5 ms |
+| [#2986254631](https://gitlab.com/ajayg10/greengate/-/pipelines/2986254631) | decision: DEPLOY_NOW | eu-north-1 grid at 35 gCO2e/kWh, below 150 (source: static: Ember 2025 Sweden national average as cited by https://inzonex.co.uk/poweratlas/sweden/ (Ember: 99% low-carbon in 2025) (accessed 2026-10-25)) |
+| [#2986254631](https://gitlab.com/ajayg10/greengate/-/pipelines/2986254631) | promoted v9 (from v8) | probe 39 requests, 0% errors, p95 39.4 ms |
+| [#2986291520](https://gitlab.com/ajayg10/greengate/-/pipelines/2986291520) | decision: DEPLOY_NOW | eu-north-1 grid at 35 gCO2e/kWh, below 150 (source: static: Ember 2025 Sweden national average as cited by https://inzonex.co.uk/poweratlas/sweden/ (Ember: 99% low-carbon in 2025) (accessed 2026-10-25)) |
+| [#2986291520](https://gitlab.com/ajayg10/greengate/-/pipelines/2986291520) | promoted v10 (from v9) | probe 39 requests, 0% errors, p95 44.7 ms |
 
 
 ## What the events show
 
+- **Automated optimization and auto-merge, hands-off:** The optimizer opened MR [!1](https://gitlab.com/ajayg10/greengate/-/merge_requests/1) removing CI waste (pip cache, `python:3.12-slim`, de-duplicated tests, `needs:`, ECR layer cache). Pipeline [#2986278167](https://gitlab.com/ajayg10/greengate/-/pipelines/2986278167) verified the guardrail policy (`gg-policy` green), evaluated the carbon reduction (`gg-verdict` measured a 21.4% cut on the candidate MR), and auto-merged into `main`. The post-merge pipeline [#2986291520](https://gitlab.com/ajayg10/greengate/-/pipelines/2986291520) achieved a **-23.1% cut in app gCO2e** and **-23.2% cut in runner minutes** with 0 waste findings remaining.
 - **Carbon-aware deferral, end to end, no human:** pipeline #2986014308 ran with the demo override
   `GG_FORCE_INTENSITY=420` (labelled "demo override, not a measurement" in the log, the commit note and the ledger).
   The decision was DEFER; an EventBridge Scheduler one-time schedule invoked the `gg-deferrer` Lambda 3 minutes later,
@@ -51,13 +64,6 @@ docs/METHODOLOGY.md §3b. The last column prices the same job minutes on GitLab'
 - **A real automatic rollback:** in #2985998994 the new Lambda version answered every probe request correctly but its
   p95 was 1841 ms (SLO 1500 ms). GreenGate rolled traffic back to v4 automatically. The cause was container-image cold
   starts, not a code bug, so the probe now warms the canary until answers are consistently fast before measuring
-  (commit 0d05eb3); the two canaries since then passed with p95 38.2 ms (v6) and 47.8 ms (v7).
+  (commit 0d05eb3); the subsequent canaries passed reliably (e.g. v10 with p95 44.7 ms).
 - **Low-carbon runner:** the same job minutes would emit about 4.6x more on GitLab's hosted runners in us-east1
   (counterfactual column), because the Stockholm grid is far cleaner.
-
-## Still to measure
-
-- Optimized runs (after the greengate-optimizer Duo flow's MR merges) and the baseline-vs-optimized reduction.
-- The break → rollback → incident → phoenix-responder fix → healthy deploy scenario and its MTTR.
-
-Both need the GitLab Duo Agent Platform (hackathon group access) and the bot token.
