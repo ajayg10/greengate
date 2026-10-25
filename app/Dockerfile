@@ -12,7 +12,7 @@ ENV PORT=8080 \
 
 WORKDIR /srv
 COPY app/requirements.txt app/requirements.txt
-RUN pip install --no-cache-dir -r app/requirements.txt
+RUN pip install --no-cache-dir --timeout 120 --retries 10 -r app/requirements.txt
 COPY app/ app/
 
 RUN useradd --system --uid 10001 ecolinks
