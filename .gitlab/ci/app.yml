@@ -1,0 +1,56 @@
+# greengate-profile: baseline
+#
+# BASELINE app pipeline, INTENTIONALLY UNOPTIMIZED. It is modeled on common CI anti-patterns found in real
+# repositories, so the greengate-optimizer Duo flow has honest waste to remove:
+#   - the full python:3.12 image (about 1 GB) instead of python:3.12-slim
+#   - pip install with no cache, in every job
+#   - strictly sequential stages, no needs:
+#   - every job runs on every change (no rules:changes), so a docs-only change rebuilds everything
+#   - the unit tests run twice, in two jobs
+#   - docker build without --cache-from (no layer cache)
+# It is still CORRECT: tests pass, and the image builds and is pushed to Amazon ECR.
+# GreenGate measures every run (SCI) and the optimizer's MR pipeline measures the before/after.
+
+lint:
+  stage: lint
+  image: python:3.12
+  script:
+    - pip install --no-cache-dir -r requirements-dev.txt
+    - ruff check .
+
+unit-tests:
+  stage: test
+  image: python:3.12
+  script:
+    - pip install --no-cache-dir -r requirements-dev.txt
+    - pytest -q tests --cov=app --cov-report=term
+
+unit-tests-again:
+  stage: test
+  image: python:3.12
+  script:
+    - pip install --no-cache-dir -r requirements-dev.txt
+    - pytest -q tests --cov=app --cov-report=term
+
+integration-tests:
+  stage: test-integration
+  image: python:3.12
+  script:
+    - pip install --no-cache-dir -r requirements-dev.txt
+    - (python -m uvicorn app.main:app --host 127.0.0.1 --port 8080 &)
+    - python scripts/smoke_local.py http://127.0.0.1:8080
+
+build-image:
+  stage: build
+  extends: .gg-aws-oidc
+  image: docker:27.3.1
+  services:
+    - docker:27.3.1-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+    AWS_ROLE_ARN: $AWS_CI_ROLE_ARN
+  script:
+    - apk add --no-cache aws-cli
+    - aws ecr get-login-password | docker login --username AWS --password-stdin "${ECR_REPOSITORY_URI%%/*}"
+    - docker build --provenance=false -f app/Dockerfile --build-arg GG_GIT_SHA="$CI_COMMIT_SHA" -t "$ECR_REPOSITORY_URI:$CI_COMMIT_SHA" .
+    - docker push "$ECR_REPOSITORY_URI:$CI_COMMIT_SHA"

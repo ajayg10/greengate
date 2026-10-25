@@ -1,12 +1,45 @@
-# GreenGate root pipeline. Real jobs live in .gitlab/ci/*.yml.
-# When this repo moves to the hackathon project, its template-validation job stays here too.
+# GreenGate root pipeline. Agents decide, pipelines execute.
+#
+#   .gitlab/ci/app.yml       the APP pipeline (lint, tests, image build). Owned by the greengate-optimizer flow:
+#                            it starts intentionally unoptimized and the flow rewrites it.
+#   .gitlab/ci/greengate.yml GreenGate machinery: SCI meter, bridge, guardrail policy, verdict, carbon-aware
+#                            deploy, Lambda canary, dashboard. Bot MRs may never touch it (policy job).
+#
+# Stages live here (not in app.yml) so an optimizer MR can't break the deploy stages.
+stages: [lint, test, test-integration, build, deploy]
+
 include:
+  # A deferred deploy (re-triggered by EventBridge Scheduler with GG_DEFERRED=true) only needs the deploy jobs:
+  # skip the whole app pipeline instead of rebuilding and retesting the same commit.
+  - local: .gitlab/ci/app.yml
+    rules:
+      - if: $GG_DEFERRED == "true"
+        when: never
+      - when: always
   - local: .gitlab/ci/greengate.yml
+  # Hackathon AI Catalog component: validates flows/ and agents/ against the catalog schemas, and syncs them to
+  # the AI Catalog when a tag is pushed (needs CATALOG_SYNC_TOKEN).
+  - component: $CI_SERVER_HOST/components/ai-catalog/catalog-sync@0.0.10
+    inputs:
+      group_id: "121124982"
+
+# Only validate flow/agent definitions when they change (lean CI).
+validate-items:
+  stage: lint
+  rules:
+    - if: $GG_DEFERRED == "true"
+      when: never
+    - changes: [flows/**/*, agents/**/*]
+
+catalog-sync:
+  rules:
+    - if: $CI_COMMIT_TAG && $CATALOG_SYNC_TOKEN
 
 # One pipeline per change: MR pipelines for MRs, branch pipelines otherwise (no duplicates).
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
       when: never
     - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG

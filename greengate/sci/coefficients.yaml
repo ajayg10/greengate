@@ -1,0 +1,132 @@
+# Every number GreenGate uses to turn CI job time into carbon, with its source.
+# verified: true  = value read from the cited source on the access date.
+# verified: false = best available estimate or an assumption; treat results that depend on it as estimates.
+method_version: "greengate-sci-1.0"
+
+sci:
+  spec: "Green Software Foundation, Software Carbon Intensity (SCI) specification, ISO/IEC 21031:2024"
+  formula: "SCI = ((E * I) + M) per R"
+  functional_unit_R: "one CI pipeline run"
+  source: "https://sci.greensoftware.foundation/"
+  accessed: "2026-10-25"
+  verified: true
+
+compute:
+  # Cloud Carbon Footprint (CCF) coefficients for Google Cloud (GitLab.com hosted runners run on Google Cloud).
+  min_watts_per_vcpu: 0.71
+  max_watts_per_vcpu: 4.26
+  # Average watts = min + utilization * (max - min). CCF falls back to 50% when utilization is unknown.
+  default_utilization: 0.5
+  source: "https://www.cloudcarbonfootprint.org/docs/methodology"
+  accessed: "2026-10-25"
+  verified: true
+
+memory:
+  kwh_per_gb_hour: 0.000392
+  source: "https://www.cloudcarbonfootprint.org/docs/methodology"
+  accessed: "2026-10-25"
+  verified: true
+
+pue:
+  value: 1.1
+  provider: "GCP"
+  source: "https://www.cloudcarbonfootprint.org/docs/methodology"
+  accessed: "2026-10-25"
+  verified: true
+
+embodied:
+  # CCF/SCI: M = TE * (TR/EL) * (RR/TR). TE for the GCP n2d family (EPYC 2nd Gen) from CCF coefficients,
+  # EL = 4 years (CCF default), RR/TR = job vCPUs / largest n2d machine (224 vCPUs).
+  # Per vCPU-hour: 2321.46 kg / (4 * 8760 h * 224 vCPU) = 0.2958 g.
+  total_embodied_kgco2e: 2321.46
+  family: "n2d"
+  largest_instance_vcpus: 224
+  lifespan_years: 4
+  g_per_vcpu_hour: 0.2958
+  source: "https://raw.githubusercontent.com/cloud-carbon-footprint/ccf-coefficients/main/output/coefficients-gcp-embodied.csv"
+  method_source: "https://www.cloudcarbonfootprint.org/docs/embodied-emissions"
+  accessed: "2026-10-25"
+  verified: true
+  note: "GitLab's docs don't name the runner machine family; n2d is an assumption (verified: false for the mapping)."
+  mapping_verified: false
+
+# GitLab.com hosted runners (Linux). vCPU and memory per runner tag.
+runners:
+  source: "https://docs.gitlab.com/ci/runners/hosted_runners/linux/"
+  accessed: "2026-10-24"
+  verified: true
+  # x86-64 runners run in Google Cloud us-east1 and us-east5, Arm64 in us-central1 (same source).
+  default_tag: saas-linux-small-amd64
+  sizes:
+    saas-linux-small-amd64: { vcpu: 2, memory_gb: 8, region: us-east1 }
+    saas-linux-medium-amd64: { vcpu: 4, memory_gb: 16, region: us-east1 }
+    saas-linux-large-amd64: { vcpu: 8, memory_gb: 32, region: us-east1 }
+    saas-linux-xlarge-amd64: { vcpu: 16, memory_gb: 64, region: us-east1 }
+    saas-linux-2xlarge-amd64: { vcpu: 32, memory_gb: 128, region: us-east1 }
+    saas-linux-small-arm64: { vcpu: 2, memory_gb: 8, region: us-central1 }
+    saas-linux-medium-arm64: { vcpu: 4, memory_gb: 16, region: us-central1 }
+    saas-linux-large-arm64: { vcpu: 8, memory_gb: 32, region: us-central1 }
+  region_note: "x86 jobs may land in us-east1 or us-east5; GreenGate uses us-east1 (the higher, conservative value)."
+
+# Grid carbon intensity, gCO2e per kWh (static fallback when no Electricity Maps key is set).
+grid_intensity:
+  us-east1:
+    value: 579
+    location: "South Carolina"
+    source: "https://cloud.google.com/sustainability/region-carbon (2025 data, Grid carbon intensity column)"
+    accessed: "2026-10-25"
+    verified: true
+  us-east5:
+    value: 343
+    location: "Columbus"
+    source: "https://cloud.google.com/sustainability/region-carbon (2025 data)"
+    accessed: "2026-10-25"
+    verified: true
+  us-central1:
+    value: 432
+    location: "Iowa"
+    source: "https://cloud.google.com/sustainability/region-carbon (2025 data)"
+    accessed: "2026-10-25"
+    verified: true
+  europe-north1:
+    value: 30
+    location: "Finland"
+    source: "https://cloud.google.com/sustainability/region-carbon (2025 data)"
+    accessed: "2026-10-25"
+    verified: true
+  asia-south1:
+    value: 598
+    location: "Mumbai"
+    source: "https://cloud.google.com/sustainability/region-carbon (2025 data)"
+    accessed: "2026-10-25"
+    verified: true
+  us-west1:
+    value: 98
+    location: "Oregon"
+    source: "https://cloud.google.com/sustainability/region-carbon (2025 data)"
+    accessed: "2026-10-25"
+    verified: true
+  # AWS deploy regions. AWS publishes no per-region grid intensity, so these use national/zone grid data.
+  eu-north-1:
+    value: 35
+    location: "Stockholm, Sweden"
+    source: "Ember 2025 Sweden national average as cited by https://inzonex.co.uk/poweratlas/sweden/ (Ember: 99% low-carbon in 2025)"
+    accessed: "2026-10-25"
+    verified: false
+  us-west-2:
+    value: 98
+    location: "Oregon"
+    source: "Proxy: Google us-west1 (Oregon) grid value, https://cloud.google.com/sustainability/region-carbon"
+    accessed: "2026-10-25"
+    verified: false
+
+# Electricity Maps zones for live intensity (used only when ELECTRICITYMAPS_API_KEY is set).
+electricitymaps_zones:
+  us-east1: US-CAR-SCEG
+  us-east5: US-MIDA-PJM
+  us-central1: US-MIDW-MISO
+  europe-north1: FI
+  eu-north-1: SE-SE3
+  us-west-2: US-NW-BPAT
+  us-west1: US-NW-BPAT
+  asia-south1: IN-WE

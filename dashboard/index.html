@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GreenGate Dashboard</title>
+  <meta name="description" content="Measured carbon (SCI) of every GreenGate pipeline, deploy decisions and savings.">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="wrap">
+    <div>
+      <h1>GreenGate</h1>
+      <p class="sub">Hands-off, carbon-aware path to production. Every number below is measured from real
+        GitLab pipelines with the SCI method, unless it says <em>projection</em>.</p>
+    </div>
+    <p class="meta" id="generated">Loading ledger…</p>
+  </header>
+
+  <main class="wrap">
+    <section aria-labelledby="kpi-h">
+      <h2 id="kpi-h" class="visually-hidden">Key numbers</h2>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section class="card" aria-labelledby="chart-h">
+      <div class="card-head">
+        <h2 id="chart-h">gCO2e per pipeline run</h2>
+        <p class="hint">App scope (lint, tests, image build). Baseline = the intentionally wasteful pipeline;
+          optimized = after the Duo optimizer flow's MR merged.</p>
+      </div>
+      <div class="chart-box"><canvas id="chart" aria-label="Carbon per pipeline over time" role="img"></canvas></div>
+      <p class="empty" id="chart-empty" hidden>No pipeline measurements in the ledger yet.</p>
+    </section>
+
+    <div class="grid2">
+      <section class="card" aria-labelledby="dec-h">
+        <h2 id="dec-h">Latest deploy decisions</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>When (UTC)</th><th>Decision</th><th>Why</th><th>Grid</th></tr></thead>
+            <tbody id="decisions"><tr><td colspan="4" class="empty">No decisions yet.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card projection" aria-labelledby="proj-h">
+        <h2 id="proj-h">Projection <span class="tag">projection, not a measurement</span></h2>
+        <p>If a team ran this optimization on
+          <label><input id="perday" type="number" min="1" max="100000" value="200" inputmode="numeric"> pipelines a day</label>,
+          the measured saving per pipeline would add up to:</p>
+        <p class="big" id="projection">–</p>
+        <p class="hint" id="projection-basis"></p>
+      </section>
+    </div>
+
+    <section class="card method">
+      <h2>How this is measured</h2>
+      <p>SCI = ((E × I) + M) per R, with R = one pipeline run (ISO/IEC 21031:2024). E comes from job runtime × vCPU
+        and memory power coefficients (Cloud Carbon Footprint) × PUE, I is the grid intensity of the runner region
+        (Google Cloud us-east1, where GitLab.com hosted runners run), M is amortized embodied hardware carbon.
+        Absolute grams are estimates; the percentage reduction compares the same jobs with the same method.</p>
+      <p><a id="method-link" href="https://gitlab.com/ajayg10/greengate/-/blob/main/docs/METHODOLOGY.md">Full methodology and sources</a>
+        · <a id="repo-link" href="https://gitlab.com/ajayg10/greengate">Repository</a></p>
+    </section>
+  </main>
+  <footer class="wrap"><p>MIT licensed · Built for the GitLab “Life After Code” Transcend hackathon.</p></footer>
+</body>
+</html>

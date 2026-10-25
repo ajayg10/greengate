@@ -1,0 +1,18 @@
+[project]
+name = "greengate"
+version = "0.4.0"
+description = "Hands-off, carbon-aware DevSecOps on the GitLab Duo Agent Platform"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [".venv", "build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

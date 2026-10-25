@@ -1,14 +1,25 @@
 {
   "Version": "2012-10-17",
   "Statement": [
-    { "Sid": "EcrAuth", "Effect": "Allow", "Action": "ecr:GetAuthorizationToken", "Resource": "*" },
+    {
+      "Sid": "EcrAuth",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
     {
       "Sid": "EcrPushPull",
       "Effect": "Allow",
       "Action": [
-        "ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart",
-        "ecr:CompleteLayerUpload", "ecr:PutImage", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer",
-        "ecr:DescribeImages", "ecr:DescribeRepositories"
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:PutImage",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:DescribeImages",
+        "ecr:DescribeRepositories"
       ],
       "Resource": "arn:aws:ecr:__REGION__:__ACCOUNT_ID__:repository/__ECR_REPO__"
     },
@@ -16,11 +27,23 @@
       "Sid": "LambdaDeployOurFunctionsOnly",
       "Effect": "Allow",
       "Action": [
-        "lambda:CreateFunction", "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration",
-        "lambda:GetFunction", "lambda:GetFunctionConfiguration", "lambda:PublishVersion",
-        "lambda:ListVersionsByFunction", "lambda:CreateAlias", "lambda:UpdateAlias", "lambda:GetAlias",
-        "lambda:ListAliases", "lambda:CreateFunctionUrlConfig", "lambda:UpdateFunctionUrlConfig",
-        "lambda:GetFunctionUrlConfig", "lambda:AddPermission", "lambda:GetPolicy", "lambda:TagResource",
+        "lambda:CreateFunction",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:PublishVersion",
+        "lambda:ListVersionsByFunction",
+        "lambda:CreateAlias",
+        "lambda:UpdateAlias",
+        "lambda:GetAlias",
+        "lambda:ListAliases",
+        "lambda:CreateFunctionUrlConfig",
+        "lambda:UpdateFunctionUrlConfig",
+        "lambda:GetFunctionUrlConfig",
+        "lambda:AddPermission",
+        "lambda:GetPolicy",
+        "lambda:TagResource",
         "lambda:InvokeFunction"
       ],
       "Resource": [
@@ -32,7 +55,12 @@
         "arn:aws:lambda:__REGION__:__ACCOUNT_ID__:function:gg-deferrer:*"
       ]
     },
-    { "Sid": "LambdaList", "Effect": "Allow", "Action": "lambda:ListFunctions", "Resource": "*" },
+    {
+      "Sid": "LambdaList",
+      "Effect": "Allow",
+      "Action": "lambda:ListFunctions",
+      "Resource": "*"
+    },
     {
       "Sid": "PassLambdaRoles",
       "Effect": "Allow",
@@ -41,26 +69,47 @@
         "arn:aws:iam::__ACCOUNT_ID__:role/gg-runtime",
         "arn:aws:iam::__ACCOUNT_ID__:role/gg-deferrer"
       ],
-      "Condition": { "StringEquals": { "iam:PassedToService": "lambda.amazonaws.com" } }
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "lambda.amazonaws.com"
+        }
+      }
     },
     {
       "Sid": "PassSchedulerRole",
       "Effect": "Allow",
       "Action": "iam:PassRole",
       "Resource": "arn:aws:iam::__ACCOUNT_ID__:role/gg-scheduler",
-      "Condition": { "StringEquals": { "iam:PassedToService": "scheduler.amazonaws.com" } }
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "scheduler.amazonaws.com"
+        }
+      }
     },
     {
       "Sid": "LedgerObjects",
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
       "Resource": "arn:aws:s3:::__BUCKET__/*"
     },
-    { "Sid": "LedgerList", "Effect": "Allow", "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::__BUCKET__" },
+    {
+      "Sid": "LedgerList",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::__BUCKET__"
+    },
     {
       "Sid": "DeferredDeploys",
       "Effect": "Allow",
-      "Action": ["scheduler:CreateSchedule", "scheduler:GetSchedule", "scheduler:UpdateSchedule", "scheduler:DeleteSchedule"],
+      "Action": [
+        "scheduler:CreateSchedule",
+        "scheduler:GetSchedule",
+        "scheduler:UpdateSchedule",
+        "scheduler:DeleteSchedule"
+      ],
       "Resource": "arn:aws:scheduler:__REGION__:__ACCOUNT_ID__:schedule/__SCHEDULE_GROUP__/*"
     },
     {
@@ -69,20 +118,47 @@
       "Action": "scheduler:GetScheduleGroup",
       "Resource": "arn:aws:scheduler:__REGION__:__ACCOUNT_ID__:schedule-group/__SCHEDULE_GROUP__"
     },
-    { "Sid": "DeferredDeploysList", "Effect": "Allow", "Action": "scheduler:ListSchedules", "Resource": "*" },
+    {
+      "Sid": "DeferredDeploysList",
+      "Effect": "Allow",
+      "Action": "scheduler:ListSchedules",
+      "Resource": "*"
+    },
     {
       "Sid": "ObserveMetrics",
       "Effect": "Allow",
-      "Action": ["cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics", "cloudwatch:ListMetrics"],
+      "Action": [
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics"
+      ],
       "Resource": "*"
     },
     {
       "Sid": "ReadOurLogs",
       "Effect": "Allow",
-      "Action": ["logs:FilterLogEvents", "logs:GetLogEvents", "logs:DescribeLogStreams"],
+      "Action": [
+        "logs:FilterLogEvents",
+        "logs:GetLogEvents",
+        "logs:DescribeLogStreams"
+      ],
       "Resource": [
         "arn:aws:logs:__REGION__:__ACCOUNT_ID__:log-group:/aws/lambda/ecolinks",
         "arn:aws:logs:__REGION__:__ACCOUNT_ID__:log-group:/aws/lambda/ecolinks:*"
+      ]
+    },
+    {
+      "Sid": "AmplifyDashboardDeploy",
+      "Effect": "Allow",
+      "Action": [
+        "amplify:CreateDeployment",
+        "amplify:StartDeployment",
+        "amplify:GetJob",
+        "amplify:GetApp",
+        "amplify:GetBranch"
+      ],
+      "Resource": [
+        "arn:aws:amplify:__REGION__:__ACCOUNT_ID__:apps/*"
       ]
     }
   ]

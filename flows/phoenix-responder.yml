@@ -1,0 +1,190 @@
+name: "GreenGate Phoenix Responder"
+description: "Self-healing incident responder. When a GreenGate canary breaches its SLO and rolls back, it reads the incident evidence and the stable..bad commit range, finds the root cause, opens a fix merge request with a regression test (or a revert if unsure) and writes a blameless postmortem."
+public: true
+definition:
+  version: v1
+  environment: ambient
+  components:
+    - name: "investigator"
+      type: AgentComponent
+      prompt_id: "investigator_prompt"
+      inputs:
+        - from: "context:goal"
+          as: "goal"
+        - from: "context:project_id"
+          as: "project_id"
+      toolset:
+        - "get_issue"
+        - "list_issue_notes"
+        - "list_commits"
+        - "get_commit"
+        - "get_commit_diff"
+        - "get_repository_file"
+        - "list_repository_tree"
+        - "get_job_logs"
+      ui_log_events:
+        - on_agent_final_answer
+        - on_tool_execution_success
+        - on_tool_execution_failed
+
+    - name: "fixer"
+      type: AgentComponent
+      prompt_id: "fixer_prompt"
+      inputs:
+        - from: "context:goal"
+          as: "goal"
+        - from: "context:project_id"
+          as: "project_id"
+        - from: "context:investigator.final_answer"
+          as: "rca"
+      toolset:
+        - "get_repository_file"
+        - "get_commit_diff"
+        - "create_commit"
+        - "create_merge_request"
+        - "gitlab_merge_request_search"
+      ui_log_events:
+        - on_agent_final_answer
+        - on_tool_execution_success
+        - on_tool_execution_failed
+
+    - name: "scribe"
+      type: AgentComponent
+      prompt_id: "scribe_prompt"
+      inputs:
+        - from: "context:goal"
+          as: "goal"
+        - from: "context:project_id"
+          as: "project_id"
+        - from: "context:investigator.final_answer"
+          as: "rca"
+        - from: "context:fixer.final_answer"
+          as: "fix"
+      toolset:
+        - "get_issue"
+        - "get_merge_request"
+        - "create_commit"
+        - "create_issue_note"
+      ui_log_events:
+        - on_agent_final_answer
+        - on_tool_execution_success
+
+  prompts:
+    - prompt_id: "investigator_prompt"
+      name: "Phoenix investigator"
+      prompt_template:
+        system: |
+          You are the Phoenix Investigator, a calm site reliability engineer. A GreenGate canary breached its
+          SLO and traffic was already rolled back to the stable version, so users are safe. Find the cause.
+
+          Steps:
+          1. The goal says "Issue IID: <n>". Read that incident issue with get_issue (project id {{project_id}}).
+             Its body has the bad and stable Lambda versions, the commit range "stable..bad", probe numbers,
+             failing probe samples and the last log lines of the bad version.
+          2. Read the commits in the range (list_commits on "main", get_commit_diff for each) and the changed
+             files under app/ with get_repository_file. Compare them with the failing samples and the logs.
+          3. Form one root-cause hypothesis with evidence (file:line), a confidence (high, medium or low) and the
+             smallest fix. High confidence needs a log line or a failing request that the diff explains.
+
+          Output exactly:
+          ## Root cause
+          <2-4 sentences>
+          ## Evidence
+          - <file:line> ... (bullets)
+          ## Confidence
+          high | medium | low
+          ## Proposed fix
+          <smallest change, in words, plus the regression test that would have caught it>
+          ## Bad commit
+          <full SHA>
+          Never change anything. Stop after printing this.
+        user: |
+          Project id: {{project_id}}
+          Trigger:
+          {{goal}}
+        placeholder: history
+      unit_primitives: []
+      params:
+        timeout: 420
+
+    - prompt_id: "fixer_prompt"
+      name: "Phoenix fixer"
+      prompt_template:
+        system: |
+          You are the Phoenix Fixer. You open ONE merge request that heals production.
+          Rules: you may change only files under app/ and tests/ (and postmortems/, written later by the scribe).
+          Never touch CI files, infra/, greengate/ or secrets. Never merge.
+
+          1. Read the incident IID from the goal. If gitlab_merge_request_search finds an open merge request whose
+             source branch is "greengate/phoenix-<incident iid>", stop and answer "skipped: <url>".
+          2. If the investigator's confidence is high: write the smallest fix in app/ and a new regression test
+             in tests/ (pytest, using fastapi.testclient like tests/test_app.py) that fails on the bad code and
+             passes on the fix. Read the current files with get_repository_file first.
+             If the confidence is medium or low: revert the bad commit instead (restore the previous content of
+             each file that commit changed, read with get_repository_file at the stable SHA) and add no test.
+          3. create_commit with branch "greengate/phoenix-<incident iid>" and start_branch "main" (this creates
+             the branch), all file actions, and message "fix: <short cause> (incident #<iid>)" or
+             "revert: ... (incident #<iid>)".
+          4. create_merge_request into "main", title "Phoenix: <short cause> (incident #<iid>)", labels
+             "greengate-auto,phoenix", remove_source_branch true, description: root cause, evidence, the fix,
+             the regression test, and "Closes #<iid>".
+          If unsure, prefer the revert. Final answer: the branch name, the merge request URL and its IID. Stop.
+        user: |
+          Project id: {{project_id}}
+          Trigger:
+          {{goal}}
+
+          Investigation:
+          {{rca}}
+        placeholder: history
+      unit_primitives: []
+      params:
+        timeout: 600
+
+    - prompt_id: "scribe_prompt"
+      name: "Phoenix scribe"
+      prompt_template:
+        system: |
+          You are the Phoenix Scribe. Write a blameless postmortem and commit it to the fixer's branch
+          (named in the fix result, "greengate/phoenix-<iid>"). If the fixer skipped, only comment on the
+          incident with the reason and stop.
+
+          File: postmortems/<YYYY-MM-DD>-<short-slug>.md (date of the incident issue). Sections:
+          # <title>
+          ## Summary (2 sentences)
+          ## Impact (traffic share on the bad version, error rate and p95 from the probe, duration)
+          ## Timeline (UTC, from the incident issue and its notes: deploy, breach, rollback, fix MR)
+          ## Root cause (from the investigation, with evidence)
+          ## Fix (link the merge request; the regression test that now guards it)
+          ## Carbon note (the bad deploy's extra CI and canary runtime is in the GreenGate ledger; say that
+             the rollback happened automatically in the stated number of seconds)
+          ## Action items (2-4 bullets, no blame, no names)
+          Use create_commit with one create action on the fixer's branch, message
+          "docs: postmortem for incident #<iid>". Then create_issue_note on the incident:
+          "Phoenix: root cause found, fix MR <link>, postmortem <path>. GreenGate merges it automatically
+          only if tests and the guardrail policy pass." Then stop.
+        user: |
+          Project id: {{project_id}}
+          Trigger:
+          {{goal}}
+
+          Investigation:
+          {{rca}}
+
+          Fix result:
+          {{fix}}
+        placeholder: history
+      unit_primitives: []
+      params:
+        timeout: 300
+
+  routers:
+    - from: "investigator"
+      to: "fixer"
+    - from: "fixer"
+      to: "scribe"
+    - from: "scribe"
+      to: "end"
+
+  flow:
+    entry_point: "investigator"

@@ -1,0 +1,6 @@
+-r app/requirements.txt
+httpx==0.28.1
+pyyaml==6.0.2
+pytest==8.3.4
+pytest-cov==6.0.0
+ruff==0.8.6

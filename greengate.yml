@@ -1,0 +1,38 @@
+# GreenGate intent file: the only thing a human needs to edit.
+# "Ship safely, stay under the carbon budget." Agents and pipelines act on these numbers.
+
+# Carbon budget for one pipeline run, in grams CO2e (SCI, functional unit R = one pipeline run).
+carbon_budget_g_per_pipeline: 0.6
+
+# An optimizer MR must cut gCO2e by at least this much (vs. the median of main's last baseline runs) to auto-merge.
+sci_regression_tolerance_pct: 10
+
+# Service level objectives checked by the canary probe. Breach -> automatic rollback.
+slo:
+  max_error_rate: 0.02     # share of probe requests that may fail
+  max_p95_ms: 1500         # 95th percentile latency (Lambda warm requests are ~50-150 ms)
+
+# Merge requests with any of these labels deploy immediately, whatever the grid intensity.
+urgent_labels: [urgent, security, hotfix]
+
+# Regions GreenGate may deploy to (AWS). The first one is the primary.
+allowed_regions: [eu-north-1, us-west-2]
+
+# Deploy now if the deploy region's grid is below this intensity (gCO2e/kWh), otherwise defer.
+carbon_threshold_g_per_kwh: 150
+
+# Never defer a deploy longer than this. Demo mode uses short windows so the video stays short.
+max_defer_minutes: 240
+demo_defer_minutes: 3
+
+# Canary traffic steps in percent. The last step must be 100.
+canary_steps: [10, 100]
+
+# Synthetic probe against the canary alias.
+probe:
+  requests: 40
+  duration_s: 30
+
+# Loop safety: commits and MRs carrying this label never re-trigger the optimizer.
+loop_guard_label: greengate-auto
+max_open_optimizer_mrs: 1

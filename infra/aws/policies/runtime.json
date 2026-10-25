@@ -8,6 +8,12 @@
       "Action": "s3:ListBucket",
       "Resource": "arn:aws:s3:::__BUCKET__",
       "Condition": { "StringLike": { "s3:prefix": ["ledger/*", "ledger/"] } }
+    },
+    {
+      "Sid": "EcoLinksTable",
+      "Effect": "Allow",
+      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"],
+      "Resource": "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/ecolinks-links"
     }
   ]
 }

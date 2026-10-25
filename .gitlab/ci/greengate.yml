@@ -1,19 +1,145 @@
-# GreenGate machinery jobs (protected by the guardrail policy from Phase 4).
+# GreenGate machinery jobs. Protected by the guardrail policy: bot MRs may not change this file.
+# Lean by design (we are a carbon project): slim image, pip cache, rules everywhere, small artifacts.
 
-# Keyless AWS auth. GitLab issues a short-lived OIDC JWT for the job, and the AWS CLI exchanges it for
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+# Keyless AWS auth. GitLab issues a short-lived OIDC JWT for the job, and the AWS CLI / boto3 exchange it for
 # temporary role credentials (sts:AssumeRoleWithWebIdentity). No AWS access keys exist anywhere in CI.
-# The roles only trust tokens from this project (see infra/aws/policies/oidc-trust.json).
+# The roles only trust tokens from this project (infra/aws/policies/oidc-trust.json):
+#   gg-ci       any branch: ledger read/write + image push
+#   gg-deployer main branch only: Lambda deploy, scheduler, Amplify, ledger
 .gg-aws-oidc:
   id_tokens:
     GITLAB_OIDC_TOKEN:
       aud: https://gitlab.com
   before_script:
-    - export AWS_REGION="$AWS_REGION_PRIMARY"
+    - export AWS_REGION="$AWS_REGION_PRIMARY" AWS_DEFAULT_REGION="$AWS_REGION_PRIMARY"
     - export AWS_WEB_IDENTITY_TOKEN_FILE="$(mktemp)"
     - printf '%s' "$GITLAB_OIDC_TOKEN" > "$AWS_WEB_IDENTITY_TOKEN_FILE"
     - export AWS_ROLE_SESSION_NAME="gitlab-${CI_PROJECT_ID}-${CI_JOB_ID}"
 
-# Plumbing check: OIDC -> AWS roles, ECR, ledger bucket, Control Room note.
+.gg-python:
+  image: python:3.12-slim
+  cache:
+    key: gg-pip-v1
+    paths: [.cache/pip]
+  variables:
+    GIT_DEPTH: "20"
+  before_script:
+    - !reference [.gg-aws-oidc, before_script]
+    - pip install -q -r requirements-greengate.txt
+
+.gg-main:
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+
+# --------------------------------------------------------------------------- measure
+# Measures every OTHER job of this pipeline (its own job and other .post jobs are excluded: they are still
+# running). Writes the ledger, the sticky MR note and the report artifacts.
+gg-sci-meter:
+  extends: [.gg-aws-oidc, .gg-python]
+  stage: .post
+  when: always
+  variables:
+    AWS_ROLE_ARN: $AWS_CI_ROLE_ARN
+  script:
+    - python -m greengate sci --out sci-report.json
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths: [sci-report.json, sci-report.md, findings.json]
+
+# Asks the greengate-optimizer flow to fix waste (main only, loop-guarded, idempotent).
+gg-bridge:
+  extends: [.gg-python, .gg-main]
+  stage: .post
+  needs: [gg-sci-meter]
+  before_script:
+    - pip install -q -r requirements-greengate.txt
+  script:
+    - python -m greengate bridge
+
+# Refreshes the dashboard data and redeploys the static dashboard on AWS Amplify.
+gg-dashboard:
+  extends: [.gg-aws-oidc, .gg-python, .gg-main]
+  stage: .post
+  when: always
+  needs: [gg-sci-meter]
+  variables:
+    AWS_ROLE_ARN: $AWS_DEPLOYER_ROLE_ARN
+  script:
+    - python -m greengate dashboard-data --out dashboard/data.json
+    - python scripts/amplify_deploy.py dashboard "$GG_AMPLIFY_APP_ID" main
+  artifacts:
+    expire_in: 7 days
+    paths: [dashboard/data.json]
+
+# --------------------------------------------------------------------------- guardrails (bot MRs)
+gg-policy:
+  extends: .gg-python
+  stage: lint
+  needs: []
+  variables:
+    GIT_DEPTH: "50"
+  before_script:
+    - apt-get update -qq && apt-get install -qq -y --no-install-recommends git >/dev/null
+    - pip install -q -r requirements-greengate.txt
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /(greengate-auto|greengate-optimizer|phoenix)/
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^greengate\//
+  script:
+    - python -m greengate policy
+  artifacts:
+    when: always
+    paths: [policy.json]
+
+gg-verdict:
+  extends: [.gg-aws-oidc, .gg-python]
+  stage: .post
+  needs: [gg-sci-meter, gg-policy]
+  variables:
+    AWS_ROLE_ARN: $AWS_CI_ROLE_ARN
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /(greengate-optimizer|phoenix)/
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^greengate\//
+  script:
+    - python -m greengate verdict
+  artifacts:
+    when: always
+    paths: [verdict.json]
+
+# --------------------------------------------------------------------------- deploy (main)
+gg-deploy-decide:
+  extends: [.gg-aws-oidc, .gg-python, .gg-main]
+  stage: deploy
+  variables:
+    AWS_ROLE_ARN: $AWS_DEPLOYER_ROLE_ARN
+  script:
+    - python -m greengate decide --check-image
+  artifacts:
+    reports:
+      dotenv: deploy.env
+    paths: [deploy.env, decision.json]
+
+gg-canary:
+  extends: [.gg-aws-oidc, .gg-python, .gg-main]
+  stage: deploy
+  needs: [gg-deploy-decide]
+  resource_group: production
+  variables:
+    AWS_ROLE_ARN: $AWS_DEPLOYER_ROLE_ARN
+  script:
+    - python -m greengate canary
+  environment:
+    name: production
+    url: $GG_APP_URL
+  artifacts:
+    when: always
+    paths: [canary.json, rollback.json]
+
+# --------------------------------------------------------------------------- plumbing check
 # Manual on main so it doesn't spend CI minutes. Run it with:
 #   glab ci run --branch main --variables GG_RUN_SMOKE:true
 gg-smoke:
