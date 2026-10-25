@@ -77,6 +77,10 @@ def run(*, lam: Any, ledger: Any, function: str, image_uri: str, sha: str, steps
         slo_ok_fn, sleep=time.sleep, clock=time.time) -> CanaryOutcome:
     stable = stable_version(lam, ledger, function=function)
     new = publish(lam, function=function, image_uri=image_uri, sha=sha, sleep=sleep)
+    if new == stable:
+        # Same image and configuration as the live version (for example a re-run of the same commit):
+        # Lambda returns the existing version, so there is nothing to canary.
+        return CanaryOutcome(True, new, stable, steps=[{"note": "already live, no new version"}])
     point_canary(lam, function=function, new=new)
     outcome = CanaryOutcome(False, new, stable)
     for pct in steps:

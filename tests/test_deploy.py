@@ -195,3 +195,13 @@ def test_deferrer_builds_trigger_request():
     assert req.full_url == "https://gitlab.com/api/v4/projects/ajayg10%2Fgreengate/trigger/pipeline"
     body = req.data.decode()
     assert "token=tkn" in body and "variables%5BGG_DEFERRED%5D=true" in body
+
+
+def test_canary_noop_when_version_is_already_live():
+    lam, ledger = FakeLambda(), FakeLedger()
+    lam.publish_version = lambda **kw: {"Version": "3"}  # unchanged code and config: Lambda returns the same version
+    out = canary.run(lam=lam, ledger=ledger, function="ecolinks", image_uri="repo@sha256:x", sha="b" * 40,
+                     steps=[10, 100], probe_fn=lambda v: pytest.fail("no probe expected"), slo_ok_fn=lambda r: True,
+                     sleep=lambda s: None)
+    assert out.promoted and out.new_version == out.stable_version == "3"
+    assert not any(h[0] == "alias" for h in lam.history)

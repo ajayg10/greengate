@@ -2,7 +2,8 @@
 # "Ship safely, stay under the carbon budget." Agents and pipelines act on these numbers.
 
 # Carbon budget for one pipeline run, in grams CO2e (SCI, functional unit R = one pipeline run).
-carbon_budget_g_per_pipeline: 0.6
+# Set from real runs on GreenGate's low-carbon runner (eu-north-1): the wasteful baseline measured 0.067 g.
+carbon_budget_g_per_pipeline: 0.05
 
 # An optimizer MR must cut gCO2e by at least this much (vs. the median of main's last baseline runs) to auto-merge.
 sci_regression_tolerance_pct: 10

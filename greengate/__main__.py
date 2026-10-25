@@ -348,6 +348,9 @@ def cmd_canary(a: argparse.Namespace) -> int:
     rec = {"pipeline_id": env("CI_PIPELINE_ID"), "sha": sha, "ref": env("CI_COMMIT_REF_NAME"),
            "web_url": env("CI_PIPELINE_URL"), "function": function, **out.to_dict()}
     rec.pop("steps", None)
+    if out.promoted and out.new_version == out.stable_version:
+        log(f"v{out.new_version} is already live with this image: nothing to deploy")
+        return 0
     if out.promoted:
         log(f"PROMOTED v{out.new_version} to 100% at {live_url}")
         if ledger:
