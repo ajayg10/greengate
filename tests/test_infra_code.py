@@ -78,15 +78,18 @@ def test_dashboard_data_separates_measured_and_counts():
         {"kind": "decision", "action": "DEPLOY_NOW", "reason": "clean", "intensity": {}, "created_at": "5"},
         {"kind": "deploy", "new_version": "4", "created_at": "6"},
         {"kind": "rollback", "rollback_seconds": 1.8, "created_at": "7"},
+        {"kind": "baseline", "gco2e_total": 0.05, "app_gco2e": 0.05, "app_runner_minutes": 2, "created_at": "8",
+         "failed_jobs": ["build-image"]},
     ]
     data = build(records)
     k = data["kpis"]
-    assert k["pipelines_measured"] == 3
+    assert k["pipelines_measured"] == 4  # the incomplete run is shown but kept out of the medians
     assert k["baseline_median_g"] == pytest.approx(1.05)
     assert k["reduction_pct"] == pytest.approx(52.4, abs=0.1)
     assert k["deploys_deferred"] == 1 and k["deploys_now"] == 1 and k["rollbacks"] == 1
     assert k["median_rollback_seconds"] == 1.8
-    assert len(data["series"]) == 3 and len(data["decisions"]) == 4
+    assert len(data["series"]) == 4 and len(data["decisions"]) == 4
+    assert data["series"][-1]["complete"] is False
     json.dumps(data)
 
 

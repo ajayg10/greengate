@@ -110,9 +110,12 @@ def cmd_sci(a: argparse.Namespace) -> int:
                 "kind": kind, "pipeline_id": pipeline_id, "sha": env("CI_COMMIT_SHA"), "ref": ref,
                 "mr_iid": mr_iid or None, "source": env("CI_PIPELINE_SOURCE"), "profile": report["profile"],
                 "web_url": env("CI_PIPELINE_URL"), "gco2e_total": t["gco2e_total"], "kwh": t["kwh"],
+                "gco2e_if_gitlab_hosted": t.get("gco2e_if_gitlab_hosted"),
                 "duration_s": t["duration_s"], "runner_minutes": t["runner_minutes"],
                 "app_gco2e": report["app"]["gco2e_total"], "app_runner_minutes": report["app"]["runner_minutes"],
                 "findings_count": len(findings), "findings": [f["id"] for f in findings],
+                # A run with failed jobs is incomplete: it is stored but never counted as baseline/optimized.
+                "failed_jobs": [j["name"] for j in report["jobs"] if j["status"] == "failed"],
                 "deferred": env("GG_DEFERRED") == "true",
             })
             log(f"ledger: s3://{ledger.bucket}/{key}")
@@ -218,7 +221,11 @@ def cmd_verdict(a: argparse.Namespace) -> int:
     failed = [j["name"] for j in jobs if j.get("status") == "failed" and not j.get("allow_failure")
               and j.get("name") != env("CI_JOB_NAME")]
     ledger = ledger_or_none()
-    baselines = ledger.recent(kind="baseline", ref=env("CI_DEFAULT_BRANCH", "main"), n=3) if ledger else []
+    baselines = []
+    if ledger:
+        rows = [r for r in ledger.recent(kind="baseline", ref=env("CI_DEFAULT_BRANCH", "main"), n=50)
+                if not r.get("failed_jobs")]
+        baselines = rows[-3:]
     candidate = {"app_gco2e": report.get("app", {}).get("gco2e_total", 0.0),
                  "app_runner_minutes": report.get("app", {}).get("runner_minutes", 0.0)}
     v = verdict.evaluate(candidate=candidate, baselines=baselines, tolerance_pct=intent.sci_regression_tolerance_pct,

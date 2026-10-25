@@ -15,8 +15,9 @@ def _median(values: list[float]) -> float | None:
 
 def build(records: list[dict[str, Any]]) -> dict[str, Any]:
     pipes = [r for r in records if r.get("kind") in PIPELINE_KINDS and "gco2e_total" in r]
-    base = [r for r in pipes if r["kind"] == "baseline"]
-    opt = [r for r in pipes if r["kind"] == "optimized"]
+    complete = [r for r in pipes if not r.get("failed_jobs")]  # incomplete runs never enter the medians
+    base = [r for r in complete if r["kind"] == "baseline"]
+    opt = [r for r in complete if r["kind"] == "optimized"]
     base_g = _median([float(r.get("app_gco2e", r["gco2e_total"])) for r in base])
     opt_g = _median([float(r.get("app_gco2e", r["gco2e_total"])) for r in opt])
     base_min = _median([float(r.get("app_runner_minutes", r.get("runner_minutes", 0))) for r in base])
@@ -26,6 +27,9 @@ def build(records: list[dict[str, Any]]) -> dict[str, Any]:
     deploys = [r for r in records if r.get("kind") == "deploy"]
     rollbacks = [r for r in records if r.get("kind") == "rollback"]
     incidents = [r for r in records if r.get("kind") == "incident" and r.get("mttr_minutes") is not None]
+    cf = [r for r in complete if r.get("gco2e_if_gitlab_hosted")]
+    cf_actual = sum(float(r["gco2e_total"]) for r in cf)
+    cf_hosted = sum(float(r["gco2e_if_gitlab_hosted"]) for r in cf)
     saved_per_run = (base_g - opt_g) if base_g is not None and opt_g is not None else None
     saved_total = saved_per_run * len(opt) if saved_per_run is not None else None
     return {
@@ -48,11 +52,15 @@ def build(records: list[dict[str, Any]]) -> dict[str, Any]:
             "median_rollback_seconds": _median([float(r["rollback_seconds"]) for r in rollbacks
                                                 if r.get("rollback_seconds") is not None]),
             "mttr_minutes": _median([float(r["mttr_minutes"]) for r in incidents]),
+            # Counterfactual estimate: the same job minutes on GitLab hosted runners (Google Cloud us-east1).
+            "runner_region_saving_pct": round(100.0 * (1 - cf_actual / cf_hosted), 1) if cf_hosted else None,
+            "gco2e_if_gitlab_hosted_total": round(cf_hosted, 4) if cf_hosted else None,
         },
         "series": [{"t": r.get("created_at"), "g": round(float(r["gco2e_total"]), 4),
                     "app_g": round(float(r.get("app_gco2e", r["gco2e_total"])), 4), "kind": r["kind"],
                     "minutes": r.get("runner_minutes"), "pipeline": r.get("pipeline_id"), "url": r.get("web_url"),
-                    "ref": r.get("ref")} for r in pipes],
+                    "ref": r.get("ref"), "complete": not r.get("failed_jobs"),
+                    "if_hosted_g": r.get("gco2e_if_gitlab_hosted")} for r in pipes],
         "decisions": [{"t": r.get("created_at"), "kind": r.get("kind"), "action": r.get("action"),
                        "reason": r.get("reason") or ("promoted" if r.get("kind") == "deploy" else "rolled back"),
                        "source": (r.get("intensity") or {}).get("source", ""),

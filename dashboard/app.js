@@ -24,6 +24,8 @@ function renderTiles(k) {
     tile("Rollback time", k.median_rollback_seconds == null ? "–" : `${fmt(k.median_rollback_seconds, 1)} s`,
       "SLO breach → traffic restored"),
     tile("MTTR", k.mttr_minutes == null ? "–" : `${fmt(k.mttr_minutes, 0)} min`, "incident → healthy deploy"),
+    tile("Low-carbon runner effect", k.runner_region_saving_pct == null ? "–" : `${fmt(k.runner_region_saving_pct, 0)}%`,
+      "counterfactual vs GitLab hosted runners (us-east1)", k.runner_region_saving_pct > 0),
   ].join("");
 }
 
