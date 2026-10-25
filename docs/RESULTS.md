@@ -19,8 +19,10 @@ docs/METHODOLOGY.md §3b. The last column prices the same job minutes on GitLab'
 | [#2986006432](https://gitlab.com/ajayg10/greengate/-/pipelines/2986006432) | baseline | yes | 0.0377 | 1.81 | 0.0689 | 0.3169 |
 | [#2986014308](https://gitlab.com/ajayg10/greengate/-/pipelines/2986014308) | baseline | yes | 0.0405 | 1.94 | 0.0532 | 0.2447 |
 | [#2986021392](https://gitlab.com/ajayg10/greengate/-/pipelines/2986021392) | normal (deferred re-run) | yes | 0.0000 | 0.00 | 0.0290 | 0.1332 |
+| [#2986026797](https://gitlab.com/ajayg10/greengate/-/pipelines/2986026797) | baseline | no: lint | 0.0060 | 0.29 | 0.0060 | 0.0274 |
+| [#2986240536](https://gitlab.com/ajayg10/greengate/-/pipelines/2986240536) | baseline | yes | 0.0373 | 1.79 | 0.0681 | 0.3134 |
 
-**baseline median** over 5 complete runs: 0.0378 gCO2e (app scope), 1.81 runner minutes
+**baseline median** over 6 complete runs: 0.0377 gCO2e (app scope), 1.81 runner minutes
 
 | Pipeline | Event | Detail |
 |---|---|---|
@@ -35,6 +37,8 @@ docs/METHODOLOGY.md §3b. The last column prices the same job minutes on GitLab'
 | [#2986014308](https://gitlab.com/ajayg10/greengate/-/pipelines/2986014308) | decision: DEFER | eu-north-1 grid at 420 gCO2e/kWh is above 150: re-checking in 3 min (source: demo override (GG_FORCE_INTENSITY), not a measurement) |
 | [#2986021392](https://gitlab.com/ajayg10/greengate/-/pipelines/2986021392) | decision: DEPLOY_NOW | eu-north-1 grid at 35 gCO2e/kWh, below 150 (source: static: Ember 2025 Sweden national average as cited by https://inzonex.co.uk/poweratlas/sweden/ (Ember: 99% low-carbon in 2025) (accessed 2026-10-25)) |
 | [#2986021392](https://gitlab.com/ajayg10/greengate/-/pipelines/2986021392) | promoted v7 (from v6) | probe 39 requests, 0% errors, p95 47.8 ms |
+| [#2986240536](https://gitlab.com/ajayg10/greengate/-/pipelines/2986240536) | decision: DEPLOY_NOW | eu-north-1 grid at 35 gCO2e/kWh, below 150 (source: static: Ember 2025 Sweden national average as cited by https://inzonex.co.uk/poweratlas/sweden/ (Ember: 99% low-carbon in 2025) (accessed 2026-10-25)) |
+| [#2986240536](https://gitlab.com/ajayg10/greengate/-/pipelines/2986240536) | promoted v8 (from v7) | probe 39 requests, 0% errors, p95 45.5 ms |
 
 
 ## What the events show
