@@ -50,6 +50,32 @@ embodied:
   note: "GitLab's docs don't name the runner machine family; n2d is an assumption (verified: false for the mapping)."
   mapping_verified: false
 
+# AWS coefficients, for GreenGate's own runner (EC2 t3.large in eu-north-1).
+aws:
+  compute:
+    min_watts_per_vcpu: 0.74
+    max_watts_per_vcpu: 3.5
+    source: "https://www.cloudcarbonfootprint.org/docs/methodology"
+    accessed: "2026-10-25"
+    verified: true
+  pue:
+    value: 1.135
+    source: "https://www.cloudcarbonfootprint.org/docs/methodology"
+    accessed: "2026-10-25"
+    verified: true
+  embodied:
+    # TE for t3 from CCF; t3 is burstable, so (CCF rule) TR_total is the largest instance of the closest
+    # family, m5.24xlarge = 96 vCPUs. Per vCPU-hour: 1610.79 kg / (4 * 8760 h * 96 vCPU) = 0.4789 g.
+    total_embodied_kgco2e: 1610.79
+    family: "t3 (TR_total from m5)"
+    largest_instance_vcpus: 96
+    lifespan_years: 4
+    g_per_vcpu_hour: 0.4789
+    source: "https://raw.githubusercontent.com/cloud-carbon-footprint/ccf-coefficients/main/output/coefficients-aws-embodied.csv"
+    method_source: "https://www.cloudcarbonfootprint.org/docs/embodied-emissions"
+    accessed: "2026-10-25"
+    verified: true
+
 # GitLab.com hosted runners (Linux). vCPU and memory per runner tag.
 runners:
   source: "https://docs.gitlab.com/ci/runners/hosted_runners/linux/"
@@ -66,6 +92,9 @@ runners:
     saas-linux-small-arm64: { vcpu: 2, memory_gb: 8, region: us-central1 }
     saas-linux-medium-arm64: { vcpu: 4, memory_gb: 16, region: us-central1 }
     saas-linux-large-arm64: { vcpu: 8, memory_gb: 32, region: us-central1 }
+    # GreenGate's own runner (matched by runner description): same size as saas-linux-small-amd64.
+    greengate-aws-t3-large: { vcpu: 2, memory_gb: 8, region: eu-north-1, provider: aws }
+  counterfactual_tag: saas-linux-small-amd64
   region_note: "x86 jobs may land in us-east1 or us-east5; GreenGate uses us-east1 (the higher, conservative value)."
 
 # Grid carbon intensity, gCO2e per kWh (static fallback when no Electricity Maps key is set).

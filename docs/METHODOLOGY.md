@@ -55,6 +55,25 @@ When `ELECTRICITYMAPS_API_KEY` is set, the meter and the deploy decision use Ele
 zone mapped in `coefficients.yaml` and record "Electricity Maps live, zone …" as the source. Without a key, or
 when the API fails, they use the static table. Every report states which one was used.
 
+## 3b. Where GreenGate's own CI runs
+
+GreenGate's pipelines run on **its own GitLab runner on AWS EC2 in eu-north-1 (Stockholm)**, a `t3.large`
+(2 vCPU, 8 GB: the same size as GitLab's default hosted runner), Docker executor, `concurrent = 1` so each job owns
+the VM as the model assumes (`infra/aws/runner.sh`). Instance runners are switched off for the project.
+For jobs on that runner the meter uses the AWS coefficients from the same CCF methodology:
+
+| Coefficient | Value | Source |
+|---|---|---|
+| Min / max watts per vCPU (AWS) | 0.74 W / 3.5 W | [CCF methodology](https://www.cloudcarbonfootprint.org/docs/methodology) |
+| PUE (AWS) | 1.135 | same |
+| Embodied, t3 | TE 1610.79 kg, TR_total 96 vCPUs (CCF burstable rule: largest instance of the closest family, m5) → 0.4789 g per vCPU-hour | [CCF AWS embodied coefficients](https://raw.githubusercontent.com/cloud-carbon-footprint/ccf-coefficients/main/output/coefficients-aws-embodied.csv) |
+| Grid intensity eu-north-1 | 35 gCO2e/kWh (static, `verified: false`) or Electricity Maps zone SE-SE3 live | coefficients file |
+
+Every job record also carries a **counterfactual estimate**, `gco2e_if_gitlab_hosted`: the same job minutes priced
+on GitLab's default hosted runner (Google Cloud us-east1, 579 gCO2e/kWh). It shows what the choice of a low-carbon
+runner region is worth; it is labelled as a counterfactual, never as a measurement. Idle time of the runner VM between
+jobs is not attributed to any pipeline.
+
 ## 4. Embodied emissions M
 
 CCF/SCI allocation ([CCF embodied emissions](https://www.cloudcarbonfootprint.org/docs/embodied-emissions)):

@@ -52,7 +52,8 @@ $proj = Api -Method PUT -Path "projects/$id" `
   -Str @{ visibility = "public"; merge_method = "merge"; builds_access_level = "enabled"; issues_access_level = "enabled";
           ci_pipeline_variables_minimum_override_role = "maintainer" } `
   -Typed @{ only_allow_merge_if_pipeline_succeeds = "true"; allow_merge_on_skipped_pipeline = "false";
-            remove_source_branch_after_merge = "true"; shared_runners_enabled = "true" }
+            remove_source_branch_after_merge = "true" }
+# Instance runners are switched off by infra/gitlab/runner-token.ps1: jobs run on GreenGate's own AWS runner.
 Say ("[2] settings: visibility={0} pipelines_must_succeed={1} delete_source_branch={2} shared_runners={3} pipeline_variables={4}" -f `
   $proj.visibility, $proj.only_allow_merge_if_pipeline_succeeds, $proj.remove_source_branch_after_merge, $proj.shared_runners_enabled,
   $proj.ci_pipeline_variables_minimum_override_role)

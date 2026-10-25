@@ -117,3 +117,20 @@ def test_intensity_falls_back_when_api_fails():
 def test_unknown_region_raises():
     with pytest.raises(KeyError):
         get_intensity("mars-1", COEFF, api_key="", use_cache=False)
+
+
+def test_self_managed_aws_runner_uses_aws_coefficients_and_counterfactual():
+    job = {"id": 1, "name": "unit-tests", "stage": "test", "status": "success", "duration": 60.0, "tag_list": [],
+           "runner": {"description": "greengate-aws-t3-large"}}
+    assert runner_tag(job, COEFF) == "greengate-aws-t3-large"
+    se = Intensity("eu-north-1", 35.0, "static", "t", live=False, verified=False)
+    fp = job_footprint(job, COEFF, se, 0.5)
+    hours = 60 / 3600
+    kwh = (2 * hours * (0.74 + 0.5 * (3.5 - 0.74)) / 1000 + 8 * hours * 0.000392) * 1.135
+    assert fp["provider"] == "aws" and fp["kwh"] == pytest.approx(kwh)
+    assert fp["gco2e_operational"] == pytest.approx(kwh * 35)
+    assert fp["gco2e_embodied"] == pytest.approx(0.4789 * 2 * hours)
+    report = measure_jobs([job], intensity_fn=lambda r, c: se if r == "eu-north-1" else STATIC_579)
+    t = report["total"]
+    assert t["gco2e_if_gitlab_hosted"] > t["gco2e_total"]  # same minutes on us-east1 hosted runners
+    assert set(report["intensity"]) == {"eu-north-1", "us-east1"}

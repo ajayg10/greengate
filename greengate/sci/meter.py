@@ -35,32 +35,46 @@ def runner_tag(job: dict[str, Any], coefficients: dict[str, Any]) -> str:
         if tag in sizes:
             return tag
     desc = (job.get("runner") or {}).get("description") or ""
+    for key in sizes:  # self-managed runners are matched by their description
+        if not key.startswith("saas-") and key in desc:
+            return key
     m = RUNNER_TAG_RE.search(desc)
     if m and m.group(0) in sizes:
         return m.group(0)
     return coefficients["runners"]["default_tag"]
 
 
+def provider_coefficients(coefficients: dict[str, Any], provider: str) -> tuple[dict[str, Any], float, float]:
+    """(compute, PUE, embodied g per vCPU-hour) for the cloud the runner VM lives in."""
+    if provider == "aws":
+        a = coefficients["aws"]
+        return a["compute"], a["pue"]["value"], a["embodied"]["g_per_vcpu_hour"]
+    return coefficients["compute"], coefficients["pue"]["value"], coefficients["embodied"]["g_per_vcpu_hour"]
+
+
 def job_footprint(
-    job: dict[str, Any], coefficients: dict[str, Any], intensity: Intensity, utilization: float
+    job: dict[str, Any], coefficients: dict[str, Any], intensity: Intensity, utilization: float,
+    tag: str | None = None,
 ) -> dict[str, Any]:
-    tag = runner_tag(job, coefficients)
+    tag = tag or runner_tag(job, coefficients)
     size = coefficients["runners"]["sizes"][tag]
+    provider = size.get("provider", "gcp")
     duration_s = float(job.get("duration") or 0.0)
     hours = duration_s / 3600.0
-    c = coefficients["compute"]
+    c, pue, embodied_per_vcpu_h = provider_coefficients(coefficients, provider)
     avg_w = c["min_watts_per_vcpu"] + utilization * (c["max_watts_per_vcpu"] - c["min_watts_per_vcpu"])
     cpu_kwh = size["vcpu"] * hours * avg_w / 1000.0
     mem_kwh = size["memory_gb"] * hours * coefficients["memory"]["kwh_per_gb_hour"]
-    kwh = (cpu_kwh + mem_kwh) * coefficients["pue"]["value"]
+    kwh = (cpu_kwh + mem_kwh) * pue
     operational = kwh * intensity.g_per_kwh
-    embodied = coefficients["embodied"]["g_per_vcpu_hour"] * size["vcpu"] * hours
+    embodied = embodied_per_vcpu_h * size["vcpu"] * hours
     return {
         "id": job.get("id"),
         "name": job.get("name"),
         "stage": job.get("stage"),
         "status": job.get("status"),
         "runner_tag": tag,
+        "provider": provider,
         "vcpu": size["vcpu"],
         "memory_gb": size["memory_gb"],
         "region": size["region"],
@@ -99,7 +113,15 @@ def measure_jobs(
         region = coefficients["runners"]["sizes"][runner_tag(job, coefficients)]["region"]
         if region not in intensities:
             intensities[region] = intensity_fn(region, coefficients)
-        measured.append(job_footprint(job, coefficients, intensities[region], utilization))
+        fp = job_footprint(job, coefficients, intensities[region], utilization)
+        # Counterfactual estimate: the same job time on GitLab's default hosted runner (Google Cloud us-east1).
+        cf_tag = coefficients["runners"].get("counterfactual_tag", coefficients["runners"]["default_tag"])
+        cf_region = coefficients["runners"]["sizes"][cf_tag]["region"]
+        if cf_region not in intensities:
+            intensities[cf_region] = intensity_fn(cf_region, coefficients)
+        fp["gco2e_if_gitlab_hosted"] = job_footprint(job, coefficients, intensities[cf_region], utilization,
+                                                     tag=cf_tag)["gco2e_total"]
+        measured.append(fp)
 
     app_jobs = [j for j in measured if is_app_job(j)]
     return {
@@ -145,6 +167,7 @@ def totals(measured: list[dict[str, Any]]) -> dict[str, Any]:
         "gco2e_embodied": sum(j["gco2e_embodied"] for j in measured),
     }
     t["gco2e_total"] = t["gco2e_operational"] + t["gco2e_embodied"]
+    t["gco2e_if_gitlab_hosted"] = sum(j.get("gco2e_if_gitlab_hosted", j["gco2e_total"]) for j in measured)
     return t
 
 
