@@ -47,7 +47,7 @@ docs/METHODOLOGY.md §3b. The last column prices the same job minutes on GitLab'
 - **A real automatic rollback:** in #2985998994 the new Lambda version answered every probe request correctly but its
   p95 was 1841 ms (SLO 1500 ms). GreenGate rolled traffic back to v4 automatically. The cause was container-image cold
   starts, not a code bug, so the probe now warms the canary until answers are consistently fast before measuring
-  (commit 0d05eb3); the next three canaries passed with p95 38-48 ms.
+  (commit 0d05eb3); the two canaries since then passed with p95 38.2 ms (v6) and 47.8 ms (v7).
 - **Low-carbon runner:** the same job minutes would emit about 4.6x more on GitLab's hosted runners in us-east1
   (counterfactual column), because the Stockholm grid is far cleaner.
 
