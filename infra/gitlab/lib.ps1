@@ -28,6 +28,9 @@ function Api {
     throw "glab api $Method $Path failed: $($raw.Trim())"
   }
   if ($AsText) { return $raw }
-  if ($raw.Trim()) { return $raw | ConvertFrom-Json }
-  return $null
+  if (-not $raw.Trim()) { return $null }
+  $obj = $raw | ConvertFrom-Json
+  # PowerShell 5.1 returns a JSON array as one object: emit its elements so callers get a flat list.
+  if ($obj -is [System.Array]) { foreach ($o in $obj) { $o }; return }
+  return $obj
 }

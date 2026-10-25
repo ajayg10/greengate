@@ -65,7 +65,7 @@ systemctl enable --now docker
 curl -fsSL --retry 5 -o /usr/local/bin/gitlab-runner \
   https://s3.dualstack.us-east-1.amazonaws.com/gitlab-runner-downloads/latest/binaries/gitlab-runner-linux-amd64
 chmod +x /usr/local/bin/gitlab-runner
-useradd --system --shell /bin/false gitlab-runner || true
+mkdir -p /var/lib/gitlab-runner
 TOKEN="$(aws ssm get-parameter --name /greengate/runner-token --with-decryption --query Parameter.Value --output text --region eu-north-1)"
 /usr/local/bin/gitlab-runner register --non-interactive --url https://gitlab.com --token "$TOKEN" \
   --executor docker --docker-image alpine:3.20 --docker-privileged \
@@ -74,8 +74,23 @@ unset TOKEN
 sed -i 's/^concurrent = .*/concurrent = 1/' /etc/gitlab-runner/config.toml
 /usr/local/bin/gitlab-runner install --user=root --working-directory=/var/lib/gitlab-runner --config /etc/gitlab-runner/config.toml
 /usr/local/bin/gitlab-runner start
-# Weekly cleanup of unused images and volumes so the disk never fills up.
-echo '0 3 * * 0 root docker system prune -af --volumes >/dev/null 2>&1' > /etc/cron.d/gg-docker-prune
+# Weekly cleanup of unused images and volumes so the disk never fills up (AL2023 has no cron: systemd timer).
+printf '[Unit]
+Description=GreenGate weekly docker prune
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker system prune -af --volumes
+' > /etc/systemd/system/gg-docker-prune.service
+printf '[Unit]
+Description=GreenGate weekly docker prune
+[Timer]
+OnCalendar=Sun 03:00
+Persistent=true
+[Install]
+WantedBy=timers.target
+' > /etc/systemd/system/gg-docker-prune.timer
+systemctl daemon-reload
+systemctl enable --now gg-docker-prune.timer
 EOF
   ID="$(q ec2 run-instances --image-id "$AMI" --instance-type "$TYPE" --iam-instance-profile Name="$ROLE" \
     --security-group-ids "$SG" --user-data "file://$(native "$TMPD/user-data.sh")" \

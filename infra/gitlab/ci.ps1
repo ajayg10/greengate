@@ -3,10 +3,11 @@
 #   ci.ps1 status [-PipelineId N]      latest pipeline on main (or N): status, YAML errors, jobs, failed-job log tails
 #   ci.ps1 smoke                       start a main pipeline with GG_RUN_SMOKE=true and watch it
 #   ci.ps1 play -Job gg-smoke          play a manual job in the latest main pipeline and watch it
+#   ci.ps1 watch [-PipelineId N]       follow the latest main pipeline (or N) until it finishes
 #
 # Output also goes to .gg-out\ci.txt (gitignored).
 param(
-  [Parameter(Position = 0)][ValidateSet("status", "smoke", "play")][string]$Action = "status",
+  [Parameter(Position = 0)][ValidateSet("status", "smoke", "play", "watch")][string]$Action = "status",
   [string]$ProjectPath = "ajayg10/greengate",
   [long]$PipelineId = 0,
   [string]$Job = "gg-smoke",
@@ -57,6 +58,10 @@ function Watch([long]$pid_) {
 }
 
 switch ($Action) {
+  "watch" {
+    if ($PipelineId -eq 0) { $PipelineId = (@(Api -Path "projects/$id/pipelines?ref=main&per_page=1"))[0].id }
+    Watch $PipelineId
+  }
   "status" {
     if ($PipelineId -eq 0) { $PipelineId = (@(Api -Path "projects/$id/pipelines?ref=main&per_page=1"))[0].id }
     Show $PipelineId | Out-Null
